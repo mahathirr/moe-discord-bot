@@ -23,7 +23,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates, // 🔥 penting buat voice
+    GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -56,7 +56,7 @@ const reactionRoles = {
 const cooldown = new Set();
 
 // =========================
-// AFK VOICE SYSTEM (FIXED)
+// AFK SYSTEM (FIXED 100% SAFE)
 // =========================
 let afkConnection = null;
 
@@ -71,12 +71,12 @@ async function joinAFK(channel) {
 
   afkConnection.on('stateChange', (_, newState) => {
     if (newState.status === VoiceConnectionStatus.Disconnected) {
-      try {
-        afkConnection.rejoin(); // 🔥 lebih stabil
-      } catch {
-        setTimeout(() => joinAFK(channel), 5000);
-      }
+      setTimeout(() => joinAFK(channel), 5000);
     }
+  });
+
+  afkConnection.on('error', () => {
+    setTimeout(() => joinAFK(channel), 5000);
   });
 
   return afkConnection;
@@ -106,16 +106,14 @@ client.once('ready', async () => {
 });
 
 // =========================
-// INTERACTIONS
+// COMMANDS
 // =========================
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const channel = interaction.channel;
 
-  // =========================
   // CLEAR
-  // =========================
   if (interaction.commandName === 'clear') {
     if (interaction.user.id !== OWNER_ID) {
       return interaction.reply({ content: "❌ no access", flags: 64 });
@@ -137,7 +135,7 @@ client.on('interactionCreate', async (interaction) => {
             m => Date.now() - m.createdTimestamp < 14 * 24 * 60 * 60 * 1000
           );
 
-          if (deletable.size > 0) {
+          if (deletable.size) {
             await channel.bulkDelete(deletable, true);
             deleted += deletable.size;
           }
@@ -149,10 +147,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const amount = parseInt(input);
-
-      if (isNaN(amount)) {
-        return interaction.editReply("❌ harus angka atau 'all'");
-      }
+      if (isNaN(amount)) return interaction.editReply("❌ invalid number");
 
       let deleted = 0;
       let remaining = amount;
@@ -179,23 +174,18 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // =========================
   // AFK
-  // =========================
   if (interaction.commandName === 'afk') {
     const vc = interaction.member.voice.channel;
 
     if (!vc) {
-      return interaction.reply({
-        content: "lu harus masuk voice dulu",
-        flags: 64,
-      });
+      return interaction.reply({ content: "join voice first", flags: 64 });
     }
 
     await joinAFK(vc);
 
     return interaction.reply({
-      content: "MOE AFK active (24/7 mode)",
+      content: "AFK MODE ACTIVE 🔊",
       flags: 64,
     });
   }
@@ -208,9 +198,7 @@ client.on('guildMemberAdd', async (member) => {
   try {
     const role = member.guild.roles.cache.get(AUTO_ROLE_ID);
     if (role) await member.roles.add(role);
-  } catch (err) {
-    console.log(err);
-  }
+  } catch {}
 });
 
 // =========================
@@ -223,7 +211,7 @@ async function getHumanCount(guild) {
   } catch {
     return guild.memberCount;
   }
-});
+}
 
 // =========================
 // WELCOME IMAGE
@@ -327,13 +315,13 @@ client.on('messageReactionAdd', async (reaction, user) => {
 });
 
 // =========================
-// REACTION REMOVE (FIXED BUG)
+// REACTION REMOVE
 // =========================
 client.on('messageReactionRemove', async (reaction, user) => {
   if (user.bot) return;
 
   if (reaction.partial) await reaction.fetch();
-  if (reaction.message.partial) await reaction.message.fetch(); // 🔥 FIX
+  if (reaction.message.partial) await reaction.message.fetch();
 
   if (reaction.message.id !== reactionRoles.messageId) return;
 
