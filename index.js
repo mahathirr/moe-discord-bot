@@ -54,30 +54,41 @@ const reactionRoles = {
 const cooldown = new Set();
 
 // =========================
-// AFK SYSTEM
+// AFK SYSTEM (STABLE FIX)
 // =========================
 let afkConnection = null;
+let afkChannel = null;
 
-async function joinAFK(channel) {
-  afkConnection = joinVoiceChannel({
-    channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    selfDeaf: true,
-    selfMute: true,
-  });
+async function connectAFK() {
+  if (!afkChannel) return;
 
-  afkConnection.on('stateChange', (_, newState) => {
-    if (newState.status === VoiceConnectionStatus.Disconnected) {
-      setTimeout(() => joinAFK(channel), 5000);
-    }
-  });
+  try {
+    const connection = joinVoiceChannel({
+      channelId: afkChannel.id,
+      guildId: afkChannel.guild.id,
+      adapterCreator: afkChannel.guild.voiceAdapterCreator,
+      selfDeaf: true,
+      selfMute: true,
+    });
 
-  afkConnection.on('error', () => {
-    setTimeout(() => joinAFK(channel), 5000);
-  });
+    connection.on('stateChange', (_, newState) => {
+      if (newState.status === VoiceConnectionStatus.Disconnected) {
+        try { connection.destroy(); } catch {}
+        setTimeout(connectAFK, 3000);
+      }
+    });
 
-  return afkConnection;
+    connection.on('error', () => {
+      try { connection.destroy(); } catch {}
+      setTimeout(connectAFK, 5000);
+    });
+
+    afkConnection = connection;
+    console.log("AFK connected 🔊");
+  } catch (err) {
+    console.log("AFK error:", err);
+    setTimeout(connectAFK, 5000);
+  }
 }
 
 // =========================
@@ -112,7 +123,7 @@ client.on('interactionCreate', async (interaction) => {
   const channel = interaction.channel;
 
   // =========================
-  // CLEAR (FIXED)
+  // CLEAR (UNCHANGED)
   // =========================
   if (interaction.commandName === 'clear') {
     if (interaction.user.id !== OWNER_ID) {
@@ -124,7 +135,6 @@ client.on('interactionCreate', async (interaction) => {
     try {
       await interaction.deferReply({ flags: 64 });
 
-      // ALL MODE
       if (input === 'all') {
         let deleted = 0;
 
@@ -147,7 +157,6 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply(`✅ deleted ${deleted} messages`);
       }
 
-      // NUMBER MODE (FIX FIX FIX)
       const amount = parseInt(input);
       if (isNaN(amount)) {
         return interaction.editReply("❌ invalid number");
@@ -174,7 +183,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // =========================
-  // AFK
+  // AFK (FIXED ENTRY)
   // =========================
   if (interaction.commandName === 'afk') {
     const vc = interaction.member.voice.channel;
@@ -183,10 +192,11 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: "join voice first", flags: 64 });
     }
 
-    await joinAFK(vc);
+    afkChannel = vc;
+    await connectAFK();
 
     return interaction.reply({
-      content: "AFK MODE ACTIVE 🔊",
+      content: "AFK MODE ACTIVE 🔊 (stable)",
       flags: 64,
     });
   }
