@@ -54,7 +54,7 @@ const reactionRoles = {
 const cooldown = new Set();
 
 // =========================
-// AFK SYSTEM (FIXED 100% SAFE)
+// AFK SYSTEM
 // =========================
 let afkConnection = null;
 
@@ -111,7 +111,9 @@ client.on('interactionCreate', async (interaction) => {
 
   const channel = interaction.channel;
 
-  // CLEAR
+  // =========================
+  // CLEAR (FIXED)
+  // =========================
   if (interaction.commandName === 'clear') {
     if (interaction.user.id !== OWNER_ID) {
       return interaction.reply({ content: "❌ no access", flags: 64 });
@@ -122,6 +124,7 @@ client.on('interactionCreate', async (interaction) => {
     try {
       await interaction.deferReply({ flags: 64 });
 
+      // ALL MODE
       if (input === 'all') {
         let deleted = 0;
 
@@ -133,10 +136,10 @@ client.on('interactionCreate', async (interaction) => {
             m => Date.now() - m.createdTimestamp < 14 * 24 * 60 * 60 * 1000
           );
 
-          if (deletable.size) {
-            await channel.bulkDelete(deletable, true);
-            deleted += deletable.size;
-          }
+          if (!deletable.size) break;
+
+          await channel.bulkDelete(deletable, true);
+          deleted += deletable.size;
 
           if (msgs.size < 100) break;
         }
@@ -144,27 +147,25 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply(`✅ deleted ${deleted} messages`);
       }
 
+      // NUMBER MODE (FIX FIX FIX)
       const amount = parseInt(input);
-      if (isNaN(amount)) return interaction.editReply("❌ invalid number");
-
-      let deleted = 0;
-      let remaining = amount;
-
-      while (remaining > 0) {
-        const msgs = await channel.messages.fetch({ limit: 100 });
-        const filtered = msgs.filter(m => !m.pinned);
-
-        if (!filtered.size) break;
-
-        await channel.bulkDelete(filtered, true);
-
-        deleted += filtered.size;
-        remaining -= filtered.size;
-
-        if (msgs.size < 100) break;
+      if (isNaN(amount)) {
+        return interaction.editReply("❌ invalid number");
       }
 
-      return interaction.editReply(`✅ deleted ${deleted} messages`);
+      const msgs = await channel.messages.fetch({ limit: 100 });
+
+      const filtered = msgs
+        .filter(m => !m.pinned)
+        .first(amount);
+
+      if (!filtered.length) {
+        return interaction.editReply("❌ no messages found");
+      }
+
+      await channel.bulkDelete(filtered, true);
+
+      return interaction.editReply(`✅ deleted ${filtered.length} messages`);
 
     } catch (err) {
       console.log(err);
@@ -172,7 +173,9 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
+  // =========================
   // AFK
+  // =========================
   if (interaction.commandName === 'afk') {
     const vc = interaction.member.voice.channel;
 
@@ -292,8 +295,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
     if (reaction.message.id !== reactionRoles.messageId) return;
 
-    const emoji = reaction.emoji.name;
-    const roleId = reactionRoles.roles[emoji];
+    const roleId = reactionRoles.roles[reaction.emoji.name];
     if (!roleId) return;
 
     const member = await reaction.message.guild.members.fetch(user.id);
