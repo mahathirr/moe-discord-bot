@@ -23,6 +23,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates, // 🔥 penting buat voice
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -55,7 +56,7 @@ const reactionRoles = {
 const cooldown = new Set();
 
 // =========================
-// AFK VOICE SYSTEM
+// AFK VOICE SYSTEM (FIXED)
 // =========================
 let afkConnection = null;
 
@@ -70,7 +71,11 @@ async function joinAFK(channel) {
 
   afkConnection.on('stateChange', (_, newState) => {
     if (newState.status === VoiceConnectionStatus.Disconnected) {
-      setTimeout(() => joinAFK(channel), 5000);
+      try {
+        afkConnection.rejoin(); // 🔥 lebih stabil
+      } catch {
+        setTimeout(() => joinAFK(channel), 5000);
+      }
     }
   });
 
@@ -101,7 +106,7 @@ client.once('ready', async () => {
 });
 
 // =========================
-// INTERACTIONS (CLEAR + AFK)
+// INTERACTIONS
 // =========================
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
@@ -109,14 +114,11 @@ client.on('interactionCreate', async (interaction) => {
   const channel = interaction.channel;
 
   // =========================
-  // CLEAR COMMAND
+  // CLEAR
   // =========================
   if (interaction.commandName === 'clear') {
     if (interaction.user.id !== OWNER_ID) {
-      return interaction.reply({
-        content: "❌ no access",
-        flags: 64,
-      });
+      return interaction.reply({ content: "❌ no access", flags: 64 });
     }
 
     const input = interaction.options.getString('amount');
@@ -178,7 +180,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // =========================
-  // AFK COMMAND
+  // AFK
   // =========================
   if (interaction.commandName === 'afk') {
     const vc = interaction.member.voice.channel;
@@ -221,7 +223,7 @@ async function getHumanCount(guild) {
   } catch {
     return guild.memberCount;
   }
-}
+});
 
 // =========================
 // WELCOME IMAGE
@@ -287,7 +289,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // =========================
-// REACTION ROLE
+// REACTION ROLE ADD
 // =========================
 client.on('messageReactionAdd', async (reaction, user) => {
   try {
@@ -325,13 +327,13 @@ client.on('messageReactionAdd', async (reaction, user) => {
 });
 
 // =========================
-// REMOVE ROLE
+// REACTION REMOVE (FIXED BUG)
 // =========================
 client.on('messageReactionRemove', async (reaction, user) => {
   if (user.bot) return;
 
   if (reaction.partial) await reaction.fetch();
-  if (reaction.message.partial) await reaction.fetch();
+  if (reaction.message.partial) await reaction.message.fetch(); // 🔥 FIX
 
   if (reaction.message.id !== reactionRoles.messageId) return;
 
